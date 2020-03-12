@@ -77,8 +77,9 @@ def run_exp(intup):
     rep, i, p = intup
 
     # Make noisy data, simulate pool-based case
-    y_train_noisy = utils.flip_labels(y_train, p)
-    X_seed, X_pool = X_train[:n_seed], X_train[n_seed:]
+    X_train_noisy = utils.add_gaussian_noise(X_train, p)
+    y_train_noisy = y_train  # utils.flip_labels(y_train, p)
+    X_seed, X_pool = X_train_noisy[:n_seed], X_train_noisy[n_seed:]
     y_seed, y_pool = y_train_noisy[:n_seed], y_train_noisy[n_seed:]
 
     # Initializing the learner
@@ -145,7 +146,8 @@ for it in range(len(rtup)):
     all_results[rep, i] = histories[it] 
 
 
-tags = list(map(lambda p: 'p=' + str(p), ps))
+tags = list(map(lambda p: 'var=' + str(p), ps))
 results = np.mean(all_results, axis=0)
 utils.plot_learning_curves(results, range(n_seed + 1, query_budget + 1),
                            tags, '{}_synthetic_noisy_labels.png'.format(dataset.split('.')[0]))
+

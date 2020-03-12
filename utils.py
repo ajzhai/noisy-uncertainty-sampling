@@ -27,10 +27,17 @@ def add_uniform_noise(X, s):
     return X + np.random.uniform(-s, s, X.shape)
 
 
+def random_sampling(classifier, X_pool):
+    n_samples = len(X_pool)
+    query_idx = np.random.choice(range(n_samples))
+    return [query_idx], X_pool[query_idx]
+
+
 def plot_learning_curves(results, xs, leg_tags, outfile, ylabel='accuracy', do_show=False):
     """Plots the given learning curves with the given legend tags and saves to a file."""
     for i, curve in enumerate(results):
         plt.plot(xs, curve, label=leg_tags[i])
+    plt.ylim(0.5, 1.0)
     plt.xlabel('# of labels queried')
     plt.ylabel(ylabel)
     plt.grid()
