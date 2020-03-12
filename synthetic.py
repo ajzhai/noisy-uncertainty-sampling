@@ -26,8 +26,9 @@ def run_exp(intup):
     rep, i, p = intup
 
     # Make noisy data, simulate pool-based case
-    y_train_noisy = utils.flip_labels(y_train, p)
-    X_seed, X_pool = X_train[:n_seed], X_train[n_seed:]
+    X_train_noisy = utils.add_gaussian_noise(X_train, p)
+    y_train_noisy = y_train  # utils.flip_labels(y_train, p)
+    X_seed, X_pool = X_train_noisy[:n_seed], X_train_noisy[n_seed:]
     y_seed, y_pool = y_train_noisy[:n_seed], y_train_noisy[n_seed:]
 
     # Initializing the learner
@@ -49,9 +50,9 @@ np.random.seed(165)
 X_train, X_test, y_train, y_test = load_data('wdbc_data.csv', 300)
 
 n_seed = 5
-query_budget = 50
+query_budget = 30
 reps = 100
-ps = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+ps = np.arange(0, 3.1, 1.0)  # noise level
 log_interval = 10
 all_results = np.zeros((reps, len(ps), query_budget - n_seed))
 
@@ -68,7 +69,7 @@ for it in range(len(rtup)):
     all_results[rep, i] = histories[it] 
 
 
-tags = list(map(lambda p: 'p=' + str(p), ps))
+tags = list(map(lambda p: 'var=' + str(p), ps))
 results = np.mean(all_results, axis=0)
 utils.plot_learning_curves(results, range(n_seed + 1, query_budget + 1),
-                           tags, 'synthetic_noisy_labels.png')
+                           tags, './figures/GN_entropy.png')
