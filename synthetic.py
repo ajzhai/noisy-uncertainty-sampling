@@ -141,6 +141,9 @@ def fleiss_kappa(labels, nj):
 
     spj = sum(pj)
     pjs = [x/spj for x in pj]
+
+    #print(pjs)
+
     pis = []
     
     for i in range(len(labels)):
@@ -148,10 +151,8 @@ def fleiss_kappa(labels, nj):
         ct = 0
         for j in range(len(labels[i])):
             for k in range(j + 1, len(labels[i])):
-                if labels[j] == -1 or labels[k] == -1:
-                    continue
                 ct += 1
-                if labels[j] == labels[k]:
+                if labels[i][j] == labels[i][k]:
                     pi += 1
         if(ct == 0):
             pis.append(1)
@@ -162,7 +163,7 @@ def fleiss_kappa(labels, nj):
     print(pbar, pebar)
     return (pbar - pebar)/(1 - pebar)
 
-        
+
 np.random.seed(165)
 dataset = 'blood.csv'
 
@@ -170,7 +171,7 @@ dataset = 'blood.csv'
 X_train, X_test, y_train, y_test, kappa = load_music('music_train.pkl', 'music_test.pkl', 0.4)
 
 print(kappa)
-
+'''
 n_seed = 15
 query_budget = 150
 reps = 100
@@ -196,4 +197,4 @@ results = np.mean(all_results, axis=0)
 
 utils.plot_learning_curves(results, range(n_seed + 1, query_budget + 1),
                            tags, '{}_synthetic_noisy_labels.png'.format(dataset.split('.')[0]))
-
+'''
