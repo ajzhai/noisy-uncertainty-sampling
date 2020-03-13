@@ -25,7 +25,7 @@ def load_data(filename, p_train):
     y_train, y_test = y[:n_train], y[n_train:]
     return X_train, X_test, y_train, y_test
 
-def load_music(ftrain, ftest):
+def load_music(ftrain, ftest, p_train):
     """Load a dataset CSV, shuffle, and split into train and test."""
     data_train = pkl.load(open(ftrain, 'rb'))
     data_test = pkl.load(open(ftest, 'rb'))
@@ -37,23 +37,21 @@ def load_music(ftrain, ftest):
         X_train.append(i[0])
     X_train = np.array(X_train)
 
+    tset = set([])
+    for i in data_train:
+        for l in i[1]:
+            tset.add(l)
+
+    tset = list(tset)
+    total_j = len(tset)
+    tmap = {tset[i]:i for i in range(len(tset))}
+    
     y_train = []
     for i in data_train:
-        counts = {}
+        y_i = []
         for l in i[1]:
-            if l in counts:
-                counts[l] += 1
-            else:
-                counts[l] = 1
-        label_max = None
-        lmax = -1
-        for key in counts:
-            if counts[key] > lmax:
-                lmax = counts[key]
-                label_max = key
-            
-        y_train.append(label_max)
-    y_train = np.array(y_train)
+            y_i.append(tmap[l])
+        y_train.append(y_i)
 
     X_test = []
     for i in data_test:
@@ -62,15 +60,29 @@ def load_music(ftrain, ftest):
 
     y_test = []
     for i in data_test:
-        y_test.append(i[1][0])
+        y_test.append(tmap[i[1][0]])
     y_test = np.array(y_test)
 
+    which = [_ for _ in range(len(X_train))]
+    random.shuffle(which)
+    which = which[0:int(p_train*len(which))]
+
+    X_train = X_train[which]
+    y_train_sel = []
+    for i in which:
+        y_train_sel.append(np.bincount(y_train[i]).argmax())
+    y_train_sel = np.array(y_train_sel)
+    
     scaler = StandardScaler()
+    
     scaler.fit(X_train)
     X_train = scaler.transform(X_train)
     X_test = scaler.transform(X_test)
 
-    return X_train, X_test, y_train, y_test
+    y_train_kappa = []
+    for i in which:
+        y_train_kappa.append(y_train[i])
+    return X_train, X_test, y_train_sel, y_test, fleiss_kappa(y_train_kappa, total_j)
 
 def run_exp(intup):
     global X_train, X_test, y_train, y_test
@@ -119,7 +131,7 @@ def run_exp_music(intup):
         history[j] = learner.score(X_test, y_test)
     return history
 
-def fleiss_kappa(labels, ni, nj):
+def fleiss_kappa(labels, nj):
     pj = [0 for _ in range(nj)]
 
     for i in range(len(labels)):
@@ -141,9 +153,13 @@ def fleiss_kappa(labels, ni, nj):
                 ct += 1
                 if labels[j] == labels[k]:
                     pi += 1
-        pis.append(pi/ct)
+        if(ct == 0):
+            pis.append(1)
+        else:
+            pis.append(pi/ct)
     pbar = sum(pis)/len(pis)
     pebar = sum([x**2 for x in pjs])
+    print(pbar, pebar)
     return (pbar - pebar)/(1 - pebar)
 
         
@@ -151,12 +167,14 @@ np.random.seed(165)
 dataset = 'blood.csv'
 
 #X_train, X_test, y_train, y_test = load_data(dataset, 0.8)
-X_train, X_test, y_train, y_test = load_music('music_train.pkl', 'music_test.pkl')
+X_train, X_test, y_train, y_test, kappa = load_music('music_train.pkl', 'music_test.pkl', 0.4)
+
+print(kappa)
 
 n_seed = 15
-query_budget = 700
+query_budget = 150
 reps = 100
-ps = [0]
+ps = [0, 0.3]
 log_interval = 10
 all_results = np.zeros((reps, len(ps), query_budget - n_seed))
 
@@ -175,6 +193,7 @@ for it in range(len(rtup)):
 
 tags = list(map(lambda p: 'var=' + str(p), ps))
 results = np.mean(all_results, axis=0)
+
 utils.plot_learning_curves(results, range(n_seed + 1, query_budget + 1),
                            tags, '{}_synthetic_noisy_labels.png'.format(dataset.split('.')[0]))
 
