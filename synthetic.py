@@ -119,7 +119,34 @@ def run_exp_music(intup):
         history[j] = learner.score(X_test, y_test)
     return history
 
+def fleiss_kappa(labels, ni, nj):
+    pj = [0 for _ in range(nj)]
 
+    for i in range(len(labels)):
+        for j in range(len(labels[i])):
+            if labels[i][j] != -1:
+                pj[labels[i][j]] += 1
+
+    spj = sum(pj)
+    pjs = [x/spj for x in pj]
+    pis = []
+    
+    for i in range(len(labels)):
+        pi = 0
+        ct = 0
+        for j in range(len(labels[i])):
+            for k in range(j + 1, len(labels[i])):
+                if labels[j] == -1 or labels[k] == -1:
+                    continue
+                ct += 1
+                if labels[j] == labels[k]:
+                    pi += 1
+        pis.append(pi/ct)
+    pbar = sum(pis)/len(pis)
+    pebar = sum([x**2 for x in pjs])
+    return (pbar - pebar)/(1 - pebar)
+
+        
 np.random.seed(165)
 dataset = 'blood.csv'
 
