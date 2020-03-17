@@ -1,7 +1,7 @@
 import numpy as np
 import utils
 from modAL.models import ActiveLearner
-from modAL.uncertainty import entropy_sampling
+from modAL.uncertainty import *
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from multiprocessing import Pool
@@ -32,14 +32,27 @@ def load_music(ftrain, ftest, p_keep):
     
     y_train = []
     for i in data_train:
-        y_i = []
-        which = [_ for _ in range(len(i[1]))]
-        random.shuffle(which)
-        which = which[0:int(max(1, p_keep*len(which)))]
-        for j in which:
-            y_i.append(tmap[i[1][j]])
-        y_train.append(y_i)
+        tmp = [tmap[x] for x in i[1]]
+        gt = np.bincount(tmp).argmax()
 
+        if random.random() < p_keep:
+            #tsamprnd = []
+            #for j in i[1]:
+            #    if tmap[j] != gt:
+            #        tsamprnd.append(tmap[j])
+            #if(len(tsamprnd) == 0):
+            #    y_train.append(gt)
+            #else:
+            y_train.append(tmap[random.choice(i[1])])
+        else:
+            y_train.append(gt)
+    y_train = np.array(y_train)
+    y_gt = []
+    for i in data_train:
+        tmp = [tmap[x] for x in i[1]]
+        y_gt.append(np.bincount(tmp).argmax())
+    y_gt = np.array(y_gt)
+    
     X_test = []
     for i in data_test:
         X_test.append(i[0])
@@ -50,18 +63,14 @@ def load_music(ftrain, ftest, p_keep):
         y_test.append(tmap[i[1][0]])
     y_test = np.array(y_test)
 
-    y_train_sel = []
-    for i in y_train:
-        y_train_sel.append(np.bincount(i).argmax())
-    y_train_sel = np.array(y_train_sel)
-    
-    scaler = StandardScaler()
-    
+    scaler = StandardScaler()    
     scaler.fit(X_train)
     X_train = scaler.transform(X_train)
     X_test = scaler.transform(X_test)
 
-    return X_train, X_test, y_train_sel, y_test, fleiss_kappa(y_train, total_j)
+    tmp = [1 if y_train[i] != y_gt[i] else 0 for i in range(len(y_train))]
+    
+    return X_train, X_test, y_train, y_test, sum(tmp)/len(tmp)
 
 def run_exp_music(intup):
     global X_train, X_test, y_train, y_test
@@ -72,8 +81,8 @@ def run_exp_music(intup):
 
     # Initializing the learner
     learner = ActiveLearner(
-        estimator=RandomForestClassifier(n_estimators=10),
-        query_strategy=entropy_sampling,
+        estimator=RandomForestClassifier(n_estimators=150, max_depth=80),
+        query_strategy=uncertainty_sampling,
         X_training=X_seed, y_training=y_seed
     )
 
@@ -84,38 +93,6 @@ def run_exp_music(intup):
         learner.teach(X_pool[query_idx], y_pool[query_idx])
         history[j] = learner.score(X_test, y_test)
     return history
-
-def fleiss_kappa(labels, nj):
-    pj = [0 for _ in range(nj)]
-
-    for i in range(len(labels)):
-        for j in range(len(labels[i])):
-            if labels[i][j] != -1:
-                pj[labels[i][j]] += 1
-
-    spj = sum(pj)
-    pjs = [x/spj for x in pj]
-
-    #print(pjs)
-
-    pis = []
-    
-    for i in range(len(labels)):
-        pi = 0
-        ct = 0
-        for j in range(len(labels[i])):
-            for k in range(j + 1, len(labels[i])):
-                ct += 1
-                if labels[i][j] == labels[i][k]:
-                    pi += 1
-        if(ct == 0):
-            pis.append(1)
-        else:
-            pis.append(pi/ct)
-    pbar = sum(pis)/len(pis)
-    pebar = sum([x**2 for x in pjs])
-    return (pbar - pebar)/(1 - pebar)
-
 
 np.random.seed(165)
 dataset = 'music'
@@ -129,10 +106,10 @@ all_results = np.zeros((reps, query_budget - n_seed))
 tags = []
 full_results = []
 
-for p in [0.2, 0.4, 0.6, 0.8, 1.0]:
+for p in [0.1, 0.3, 0.6, 0.8, 1.0]:
     X_train, X_test, y_train, y_test, kappa = load_music('music_train.pkl', 'music_test.pkl', p)
     print(kappa)
-    tags.append("kappa {}".format(kappa))
+    tags.append("disagree {:.02f}".format(kappa))
     rtup = []
     for rep in range(reps):
         rtup.append(rep)
