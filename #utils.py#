@@ -35,7 +35,7 @@ def random_sampling(classifier, X_pool):
 
 def plot_learning_curves(results, xs, leg_tags, outfile, ylabel='accuracy', do_show=False):
     """Plots the given learning curves with the given legend tags and saves to a file."""
-    fig, axs = plt.subplots(1, len(results))
+
     for i, curve in enumerate(results):
         axs[i].plot(xs, curve)
         axs[i].set_title(leg_tags[i])

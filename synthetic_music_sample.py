@@ -1,5 +1,6 @@
 import numpy as np
 import utils
+import matplotlib.pyplot as plt
 from modAL.models import ActiveLearner
 from modAL.uncertainty import *
 from sklearn.ensemble import RandomForestClassifier
@@ -8,6 +9,11 @@ from multiprocessing import Pool
 import multiprocessing as mp
 import pickle as pkl
 import random
+
+def random_sampling(classifier, X_pool):
+    n_samples = len(X_pool)
+    query_idx = np.random.choice(range(n_samples))
+    return [query_idx], X_pool[query_idx]
 
 def load_music(ftrain, ftest, p_keep):
     """Load a dataset CSV, shuffle, and split into train and test."""
@@ -74,15 +80,18 @@ def load_music(ftrain, ftest, p_keep):
 
 def run_exp_music(intup):
     global X_train, X_test, y_train, y_test
-    rep = intup
+    rep, strat, n_seed = intup
 
-    X_seed, X_pool = X_train[:n_seed], X_train[n_seed:]
-    y_seed, y_pool = y_train[:n_seed], y_train[n_seed:]
+    seed = np.random.choice(range(len(X_train)), n_seed, replace=False)
+    other = list(set(range(len(X_train))) - set(seed))
+    
+    X_seed, X_pool = X_train[seed], X_train[other]
+    y_seed, y_pool = y_train[seed], y_train[other]
 
     # Initializing the learner
     learner = ActiveLearner(
-        estimator=RandomForestClassifier(n_estimators=150, max_depth=80),
-        query_strategy=uncertainty_sampling,
+        estimator=RandomForestClassifier(n_estimators=60, max_depth=30),
+        query_strategy=strat,
         X_training=X_seed, y_training=y_seed
     )
 
@@ -97,27 +106,55 @@ def run_exp_music(intup):
 np.random.seed(165)
 dataset = 'music'
 
-n_seed = 15
+n_seed = 10
 query_budget = 150
-reps = 50
+reps = 1000
 log_interval = 10
 all_results = np.zeros((reps, query_budget - n_seed))
 
 tags = []
-full_results = []
+random_results = []
 
-for p in [0.1, 0.3, 0.6, 0.8, 1.0]:
+ps = [0, 0.25, 0.5, 0.75, 1.0]
+labels = []
+fig, axs = plt.subplots(1, len(ps), figsize=(18, 4))
+xs = [_ for _ in range(n_seed+1, query_budget + 1)]
+
+for i in range(len(ps)):
+    p = ps[i]
     X_train, X_test, y_train, y_test, kappa = load_music('music_train.pkl', 'music_test.pkl', p)
     print(kappa)
-    tags.append("disagree {:.02f}".format(kappa))
+    axs[i].set_title("p {:.02f}, disagreement {:.02f}".format(p, kappa))
+
     rtup = []
     for rep in range(reps):
-        rtup.append(rep)
+        rtup.append((rep, random_sampling, n_seed))
     pool = Pool(mp.cpu_count())
-    histories = pool.map(run_exp_music, rtup)
-    all_results = np.array(histories)
-    results = np.mean(all_results, axis=0)
-    full_results.append(results)
+    results = np.array(pool.map(run_exp_music, rtup))
+    mn = np.mean(results, axis=0)
+    sd = np.std(results, axis=0)
+    print(results.shape, mn.shape, sd.shape)
+    axs[i].plot(xs, mn, color='orange', label='random')
+    axs[i].fill_between(xs, mn - sd, mn + sd, facecolor='orange', alpha=0.2)
+    pool.close()
     
-utils.plot_learning_curves(full_results, range(n_seed + 1, query_budget + 1),
-                           tags, '{}_realistic_noisy_labels.png'.format(dataset.split('.')[0]))
+    rtup = []
+    for rep in range(reps):
+        rtup.append((rep, uncertainty_sampling, n_seed))
+    pool = Pool(mp.cpu_count())
+    results = np.array(pool.map(run_exp_music, rtup))
+    mn = np.mean(results, axis=0)
+    sd = np.std(results, axis=0)
+    axs[i].plot(xs, mn, color='blue', label='uncertainty')
+    axs[i].fill_between(xs, mn - sd, mn + sd, facecolor='blue', alpha=0.2)
+    axs[i].set_ylim(0, 0.5)
+    axs[i].grid()
+    
+fig.text(0.5, 0.02, '# of labels queried', ha='center')
+fig.text(0.08, 0.5, 'test accuracy', va='center', rotation='vertical')
+
+handles, labels = axs[0].get_legend_handles_labels()
+fig.legend(handles, labels, loc='right')
+
+plt.savefig('test.png')
+
